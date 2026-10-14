@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Uber System Design: a request, hexagon by hexagon</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Instrument+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#070B16;--ink:#EAF0FF;--mut:#8D9AB8;--cy:#52E5FF;--am:#FFB84D;--co:#FF5C7A;--pn:rgba(8,13,28,.66);color-scheme:dark;box-sizing:border-box}
+*{box-sizing:border-box;margin:0}
+html,body{background:var(--bg);color:var(--ink);font-family:'Instrument Sans',system-ui,sans-serif;line-height:1.55}
+html.lenis,html.lenis body{height:auto}.lenis.lenis-smooth{scroll-behavior:auto!important}
+#gl{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block}
+header{position:fixed;top:0;left:0;right:0;z-index:20;padding:calc(1.2rem + env(safe-area-inset-top,0px)) 6vw 0;font:800 1.05rem 'Bricolage Grotesque',sans-serif;letter-spacing:-.01em;pointer-events:none}
+header span{color:var(--mut);font-weight:500}
+nav{position:fixed;right:calc(2vw + env(safe-area-inset-right,0px));top:50%;transform:translateY(-50%);z-index:20;display:flex;flex-direction:column;gap:.35rem}
+nav button{width:2.2rem;height:1.6rem;background:none;border:0;display:grid;place-items:center;color:inherit}
+nav button i{display:block;width:6px;height:6px;border-radius:50%;background:var(--mut);transition:.3s}
+nav button.on i{width:10px;height:10px;background:var(--cy);box-shadow:0 0 14px var(--cy)}
+.ch{position:relative;z-index:5;min-height:100vh;display:flex;align-items:center;padding:6rem 6vw;pointer-events:none}
+.ch.r{justify-content:flex-end}
+.ch.hero{align-items:flex-end;padding-bottom:12vh}
+.card{pointer-events:auto;max-width:31rem;padding:1.7rem;background:var(--pn);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:20px;border:1px solid rgba(255,255,255,.09)}
+h1,h2{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;letter-spacing:-.03em;line-height:.98}
+h1{font-size:clamp(2.8rem,8vw,7rem);max-width:11ch}
+h2{font-size:clamp(1.8rem,3.4vw,2.6rem);margin-bottom:.8rem}
+.w{display:inline-block;overflow:hidden;vertical-align:top;padding-right:.18em}
+.w>i{display:inline-block;font-style:normal;transform:translateY(110%)}
+.sub{max-width:34rem;margin-top:1.4rem;color:var(--mut);font-size:1.05rem}
+p{color:#C3CCE3}
+.big{font:800 2.1rem 'Bricolage Grotesque',sans-serif;color:var(--cy);letter-spacing:-.02em;margin-top:1rem}
+.note{font-size:.86rem;color:var(--mut);margin-top:.3rem}
+.row{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.1rem}
+.btn{font:500 .88rem 'Instrument Sans',sans-serif;color:var(--ink);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.18);border-radius:99px;padding:.55rem 1.05rem;transition:background .25s,color .25s}
+.btn:hover{background:rgba(255,255,255,.12)}
+.btn.on{background:var(--cy);color:#04111A;border-color:var(--cy)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--cy);outline-offset:3px}
+.bits{display:grid;grid-template-columns:1fr 2fr 1.5fr 2fr 2.5fr 7fr;gap:3px;margin-top:1.1rem;font-size:.72rem;text-align:center}
+.bits div{padding:.4rem 0;border-radius:6px;background:rgba(255,255,255,.07)}
+.bits div:nth-child(4){background:rgba(82,229,255,.25)}.bits div:nth-child(6){background:rgba(255,184,77,.2)}
+.key{display:flex;gap:1rem;margin-top:1rem;font-size:.86rem}.key b{display:inline-block;width:.7rem;height:.7rem;border-radius:50%;margin-right:.4rem}
+.hint{position:absolute;left:6vw;bottom:4vh;color:var(--mut);font-size:.85rem}
+.stack{pointer-events:auto;width:100%;max-width:64rem;margin:0 auto}
+.stack h2{font-size:clamp(2.2rem,5vw,4.4rem);margin-bottom:2rem}
+.stack a{display:flex;justify-content:space-between;gap:1rem;padding:1rem .5rem;border-top:1px solid rgba(255,255,255,.14);color:var(--ink);text-decoration:none;transition:padding .35s,background .35s}
+.stack a:last-child{border-bottom:1px solid rgba(255,255,255,.14)}
+.stack a b{font:800 1.35rem 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em}
+.stack a span{color:var(--mut);text-align:right}
+.stack a:hover{padding-left:1.6rem;background:linear-gradient(90deg,rgba(82,229,255,.14),transparent)}
+#cr,#cd{position:fixed;left:0;top:0;pointer-events:none;z-index:50}
+#cr{width:36px;height:36px;margin:-18px;border:1px solid var(--cy);border-radius:50%;transition:width .25s,height .25s,margin .25s,background .25s}
+#cr.big{width:64px;height:64px;margin:-32px;background:rgba(82,229,255,.12)}
+#cd{width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--cy)}
+@media(hover:hover){body,button,a{cursor:none}}
+@media(hover:none){#cr,#cd{display:none}}
+@media(max-width:700px){.ch,.ch.r{align-items:flex-end;padding:5rem 4vw 2rem;justify-content:center}nav{display:none}.card{padding:1.2rem}}
+@media(prefers-reduced-motion:reduce){.w>i{transform:none!important}}
+header{display:flex;justify-content:space-between;align-items:center}.hb{display:flex;gap:.5rem;pointer-events:auto}.hb .btn{padding:.45rem .9rem;background:rgba(8,13,28,.6);backdrop-filter:blur(8px)}
+#rep{position:fixed;top:0;right:0;bottom:0;width:min(40rem,100%);z-index:30;background:rgba(7,11,22,.94);backdrop-filter:blur(18px);border-left:1px solid rgba(255,255,255,.1);overflow-y:auto;padding:5rem 1.6rem 3rem;transform:translateX(100%);transition:transform .55s cubic-bezier(.2,.8,.2,1)}
+#rep.open{transform:none}
+#rep h1{font-size:1.9rem;max-width:none;margin-bottom:1rem}#rep h2{font-size:1.4rem;margin:2.2rem 0 .7rem}#rep h3{font:800 1.05rem 'Bricolage Grotesque',sans-serif;margin:1.4rem 0 .4rem}
+#rep p,#rep li{font-size:.92rem;margin:.4rem 0}#rep ul{padding-left:1.2rem}
+#rep code,#rep pre,#rep .math{font-family:ui-monospace,Menlo,monospace;font-size:.78rem}
+#rep code{background:rgba(255,255,255,.08);padding:.05rem .3rem;border-radius:4px}
+#rep pre,#rep .math{background:rgba(255,255,255,.05);border-radius:10px;padding:.8rem;overflow-x:auto;margin:.7rem 0;color:#C3CCE3;white-space:pre}
+#rep blockquote{border-left:3px solid var(--cy);padding:.4rem 1rem;background:rgba(82,229,255,.06);margin:.8rem 0;color:#C3CCE3}
+.tw{overflow-x:auto;margin:.8rem 0}#rep table{border-collapse:collapse;font-size:.8rem;width:100%}#rep th,#rep td{border-bottom:1px solid rgba(255,255,255,.12);padding:.45rem .6rem;text-align:left;vertical-align:top}#rep th{color:var(--mut);font-weight:500}
+#rep hr{border:0;border-top:1px solid rgba(255,255,255,.14);margin:1.6rem 0}#rep a{color:var(--cy)}
+.eta{border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:1rem;margin:1.2rem 0}.eta td,.eta th{text-align:center!important}.eta .win{color:#5CF0A8;font-weight:700}
+#raw{width:min(52rem,92vw);height:70vh;background:#0B1020;color:var(--ink);border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:1rem}#raw,#raw *{cursor:auto!important}#raw::backdrop{background:rgba(0,0,0,.6)}#raw textarea{width:100%;height:calc(100% - 3rem);margin-top:.6rem;background:#070B16;color:#C3CCE3;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:.8rem;font:.78rem ui-monospace,Menlo,monospace;resize:none}
+#toast{position:fixed;left:50%;bottom:calc(2rem + env(safe-area-inset-bottom,0px));transform:translate(-50%,200%);z-index:40;background:var(--cy);color:#04111A;padding:.7rem 1.2rem;border-radius:99px;font-weight:500;transition:transform .4s}#toast.on{transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="cr"></div><div id="cd"></div>
+<header><div>Uber <span>/ system design</span></div><div class="hb"><button class="btn" id="bRep" data-m aria-expanded="false">Report</button><button class="btn" id="bRaw" data-m>Raw MD</button><button class="btn on" id="bCopy" data-m>Copy for Notion</button></div></header>
+<aside id="rep" inert data-lenis-prevent aria-label="Engineering report"><div class="eta"><h3>ETA matrix: greedy vs optimal</h3><div id="etaT" class="tw"></div><div id="etaR"></div><div class="row"><button class="btn" id="etaB">Randomize</button></div></div><div id="rb"></div></aside>
+<dialog id="raw"><div class="row" style="margin:0;justify-content:space-between"><b>Raw Notion markdown</b><button class="btn" id="rawx">Close</button></div><textarea id="rawta" readonly data-lenis-prevent></textarea></dialog>
+<div id="toast" role="status"></div>
+<nav id="rail" aria-label="Chapters"></nav>
+<main>
+<section class="ch hero" id="c0">
+  <div><h1 id="h1">Every ride starts as a hexagon.</h1>
+  <p class="sub">Uber's edge ingests over 1.25 million GPS pings a second and files each one into a hexagonal cell. Move across the grid, then scroll to follow a request through the stack.</p></div>
+  <div class="hint">Scroll to begin</div>
+</section>
+<section class="ch" id="c1"><div class="card">
+  <h2>Space becomes a 64-bit number.</h2>
+  <p>Every H3 hexagon has six equidistant neighbours, so a radius search is just rings of cells: <b>gridDisk(origin, k)</b>. Geohash has two neighbour distances and S2 has four edge plus four corner neighbours.</p>
+  <div class="big" id="kout"></div>
+  <div class="note">N(k) = 1 + 3k(k + 1). Hover the grid to move the origin. Click empty space to change k.</div>
+  <div class="bits" aria-label="H3 bitfield layout"><div title="Reserved">1</div><div title="Index mode">4</div><div title="Flags">3</div><div title="Resolution 0 to 15">res 4</div><div title="Base cell 0 to 121">base 7</div><div title="15 aperture-7 digits of 3 bits">15 digits × 3 bits</div></div>
+</div></section>
+<section class="ch r" id="c2"><div class="card">
+  <h2>Wait two seconds, match better.</h2>
+  <p>Greedy first-come matching hands Rider 1 the nearest driver, even if that leaves Rider 2 waiting ten minutes. DISCO buffers requests for 2 to 5 seconds and solves the whole batch with the Hungarian algorithm in O(V³).</p>
+  <div class="row"><button class="btn" id="mG" data-m>Greedy</button><button class="btn on" id="mH" data-m>Hungarian</button><button class="btn" id="mN" data-m>New requests</button></div>
+  <div class="big" id="mout"></div><div class="note" id="mnote"></div>
+</div></section>
+<section class="ch" id="c3"><div class="card">
+  <h2>Surge shouldn't have cliffs.</h2>
+  <p>Flink counts supply and demand per H3 cell. Raw, crossing one street can drop a 2.4x multiplier to 1.0x. A weighted kernel over neighbouring rings, M_smooth(h) = Σ w·M_raw ÷ Σ w, removes the cliff.</p>
+  <div class="row"><button class="btn" id="sR" data-m>Raw demand</button><button class="btn on" id="sS" data-m>Smoothed</button></div>
+</div></section>
+<section class="ch r" id="c4"><div class="card">
+  <h2>GPS lies between tall buildings.</h2>
+  <p>A phone fuses 100 Hz IMU readings with GPS at about 0.25 Hz. Below, a simple gain-0.3 filter stands in for the Extended Kalman Filter, and Viterbi map matching then snaps the track to legal road segments.</p>
+  <div class="key"><span><b style="background:var(--co)"></b>Raw GPS</span><span><b style="background:var(--cy)"></b>Filtered track</span></div>
+</div></section>
+<section class="ch" id="c5"><div class="stack"><h2>Built in the open.</h2><div id="repos"></div></div></section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
+<script>
+const $=s=>document.querySelector(s),reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const W=()=>innerWidth,H=()=>innerHeight;let ch=0,vel=0;
+
+/* ---------- scene ---------- */
+const renderer=new THREE.WebGLRenderer({canvas:$('#gl'),antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(W(),H());
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x070B16);scene.fog=new THREE.FogExp2(0x070B16,.022);
+const cam=new THREE.PerspectiveCamera(48,W()/H(),.1,200);cam.position.set(0,46,40);
+
+/* hex grid (pointy-top axial coords) */
+const S=.6,R=13,cells=[],map=new Map(),DIRS=[[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+for(let q=-R;q<=R;q++)for(let r=Math.max(-R,-q-R);r<=Math.min(R,-q+R);r++){map.set(q+','+r,cells.length);cells.push({q,r,x:S*Math.sqrt(3)*(q+r/2),z:S*1.5*r})}
+const N=cells.length,hd=(a,b)=>{const dq=a.q-b.q,dr=a.r-b.r;return(Math.abs(dq)+Math.abs(dr)+Math.abs(dq+dr))/2};
+const geo=new THREE.CylinderGeometry(S*.93,S*.93,1,6);geo.translate(0,.5,0);
+const mesh=new THREE.InstancedMesh(geo,new THREE.MeshBasicMaterial({color:0xffffff}),N);
+mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.setColorAt(0,new THREE.Color());scene.add(mesh);
+
+/* surge fields: raw (cliffs) and kernel-smoothed over 3 rings */
+const raw=new Float32Array(N),sm=new Float32Array(N),spots=[];
+for(let i=0;i<4;i++)spots.push(cells[Math.floor(Math.random()*N)]);
+cells.forEach((c,i)=>{const near=spots.some(s=>hd(c,s)<=3);raw[i]=(near?1:.08)*(.75+.25*Math.random())});
+const WT=[1,.7,.4,.2];
+cells.forEach((c,i)=>{let a=0,b=0;cells.forEach((o,j)=>{const d=hd(c,o);if(d<=3){a+=WT[d]*raw[j];b+=WT[d]}});sm[i]=a/b});
+
+/* points: drivers + riders */
+const tex=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d'),gr=g.createRadialGradient(32,32,0,32,32,32);gr.addColorStop(0,'#fff');gr.addColorStop(.3,'rgba(255,255,255,.75)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(0,0,64,64);return new THREE.CanvasTexture(c)})();
+const pts=(n,color,size)=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(n*3),3));const p=new THREE.Points(g,new THREE.PointsMaterial({map:tex,color,size,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));p.frustumCulled=false;scene.add(p);return p};
+const ND=90,NR=8,P=16;
+const drivers=pts(ND,0xFFB84D,.7),riders=pts(NR,0xFF5C7A,1.3);
+const dp=drivers.geometry.attributes.position.array,rp=riders.geometry.attributes.position.array,dv=new Float32Array(ND*2);
+const rnd=(r)=>{const a=Math.random()*6.283,d=Math.sqrt(Math.random())*r;return[Math.cos(a)*d,Math.sin(a)*d]};
+for(let i=0;i<ND;i++){const[x,z]=rnd(i<P?6:9);dp[i*3]=x;dp[i*3+1]=.4;dp[i*3+2]=z;const a=Math.random()*6.283,s=i<P?.25:.7;dv[i*2]=Math.cos(a)*s;dv[i*2+1]=Math.sin(a)*s}
+function newRiders(){for(let i=0;i<NR;i++){const[x,z]=rnd(5.5);rp[i*3]=x;rp[i*3+1]=.5;rp[i*3+2]=z}riders.geometry.attributes.position.needsUpdate=true;match()}
+
+/* matching: greedy vs Hungarian (e-maxx form) */
+let mode='h',asg=new Array(NR).fill(0),totG=0,totH=0;
+function hung(a,n,m){const u=Array(n+1).fill(0),v=Array(m+1).fill(0),p=Array(m+1).fill(0),way=Array(m+1).fill(0);
+for(let i=1;i<=n;i++){p[0]=i;let j0=0;const mv=Array(m+1).fill(1e9),used=Array(m+1).fill(false);
+do{used[j0]=true;const i0=p[j0];let dl=1e9,j1=0;
+for(let j=1;j<=m;j++)if(!used[j]){const cur=a[i0][j]-u[i0]-v[j];if(cur<mv[j]){mv[j]=cur;way[j]=j0}if(mv[j]<dl){dl=mv[j];j1=j}}
+for(let j=0;j<=m;j++)if(used[j]){u[p[j]]+=dl;v[j]-=dl}else mv[j]-=dl;j0=j1}while(p[j0]!==0);
+do{const j1=way[j0];p[j0]=p[j1];j0=j1}while(j0)}return p}
+const dist=(i,j)=>Math.hypot(rp[i*3]-dp[j*3],rp[i*3+2]-dp[j*3+2]);
+function match(){const a=[[]];for(let i=0;i<NR;i++){a.push([0]);for(let j=0;j<P;j++)a[i+1].push(dist(i,j))}
+const p=hung(a,NR,P),H_=[],G=[],used=new Set();
+for(let j=1;j<=P;j++)if(p[j])H_[p[j]-1]=j-1;
+for(let i=0;i<NR;i++){let b=-1,bd=1e9;for(let j=0;j<P;j++)if(!used.has(j)&&a[i+1][j+1]<bd){bd=a[i+1][j+1];b=j}used.add(b);G[i]=b}
+totH=H_.reduce((s,j,i)=>s+dist(i,j),0)*.9;totG=G.reduce((s,j,i)=>s+dist(i,j),0)*.9;
+asg=mode==='h'?H_:G;
+const sv=Math.max(0,Math.round((totG-totH)/totG*100));
+$('#mout').textContent=(mode==='h'?totH:totG).toFixed(1)+' min total wait';
+$('#mnote').textContent=mode==='h'?'Hungarian saves '+sv+'% versus greedy on this batch.':'Hungarian would cut this to '+totH.toFixed(1)+' min ('+sv+'% less).'}
+const SEG=14,arcGeo=new THREE.BufferGeometry();arcGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(NR*SEG*6),3));
+const arcs=new THREE.LineSegments(arcGeo,new THREE.LineBasicMaterial({color:0x52E5FF,transparent:true,opacity:0}));arcs.frustumCulled=false;scene.add(arcs);
+function setM(m){mode=m;$('#mG').classList.toggle('on',m==='g');$('#mH').classList.toggle('on',m==='h');arcs.material.color.set(m==='h'?0x52E5FF:0xFF5C7A);match()}
+$('#mG').onclick=()=>setM('g');$('#mH').onclick=()=>setM('h');$('#mN').onclick=newRiders;
+
+/* telemetry: noisy GPS vs filtered track */
+const KM=140,mkLine=c=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(KM*3),3));const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:c,transparent:true,opacity:0}));l.frustumCulled=false;scene.add(l);return l};
+const noisy=mkLine(0xFF5C7A),filt=mkLine(0x52E5FF),probe=pts(1,0x52E5FF,1.6);
+function telemetry(t){const a=noisy.geometry.attributes.position.array,b=filt.geometry.attributes.position.array;let fx=0,fz=0;
+for(let i=0;i<KM;i++){const u=i/(KM-1),x=-9+18*u,z=Math.sin(u*5+t*.3)*2.6;
+const j=Math.random()<.06?2.2:.45,nx=x+(Math.random()-.5)*j,nz=z+(Math.random()-.5)*j;
+if(i===0){fx=nx;fz=nz}else{fx+=.3*(nx-fx);fz+=.3*(nz-fz)}
+a.set([nx,.7,nz],i*3);b.set([fx,.9,fz],i*3)}
+noisy.geometry.attributes.position.needsUpdate=filt.geometry.attributes.position.needsUpdate=true;
+const k=Math.floor(((t*.12)%1)*(KM-1));probe.geometry.attributes.position.array.set([b[k*3],1,b[k*3+2]]);probe.geometry.attributes.position.needsUpdate=true}
+
+/* postprocessing */
+const composer=new THREE.EffectComposer(renderer);composer.addPass(new THREE.RenderPass(scene,cam));
+const bloom=new THREE.UnrealBloomPass(new THREE.Vector2(W(),H()),.8,.55,.12);composer.addPass(bloom);
+const fxp=new THREE.ShaderPass({uniforms:{tDiffuse:{value:null},uS:{value:0}},vertexShader:'varying vec2 v;void main(){v=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'uniform sampler2D tDiffuse;uniform float uS;varying vec2 v;void main(){vec2 d=v-.5;float a=uS*.012*length(d);vec3 c=vec3(texture2D(tDiffuse,v+d*a).r,texture2D(tDiffuse,v).g,texture2D(tDiffuse,v-d*a).b);c*=1.-smoothstep(.25,.95,length(d));gl_FragColor=vec4(c,1.);}'});
+composer.addPass(fxp);
+
+/* interaction state */
+let origin=-1,k=2,surgeAmt=0,smooth=true,overUI=false;
+const mouse=new THREE.Vector2(),ray=new THREE.Raycaster(),plane=new THREE.Plane(new THREE.Vector3(0,1,0),0),pt=new THREE.Vector3();
+const showK=()=>$('#kout').textContent='k = '+k+' · '+(1+3*k*(k+1))+' cells';showK();
+function pick(){ray.setFromCamera(mouse,cam);if(!ray.ray.intersectPlane(plane,pt))return;
+const fq=(Math.sqrt(3)/3*pt.x-pt.z/3)/S,fr=(2/3*pt.z)/S,fs=-fq-fr;let q=Math.round(fq),r=Math.round(fr),s=Math.round(fs);
+const dq=Math.abs(q-fq),dr=Math.abs(r-fr),ds=Math.abs(s-fs);if(dq>dr&&dq>ds)q=-r-s;else if(dr>ds)r=-q-s;
+const i=map.get(q+','+r);origin=i===undefined?-1:i}
+addEventListener('pointermove',e=>{overUI=!!e.target.closest('.card,.stack,button,a,aside,dialog');if(!overUI){mouse.set(e.clientX/W()*2-1,-(e.clientY/H())*2+1);pick()}});
+addEventListener('click',e=>{if(e.target.closest('.card,.stack,button,a,aside,dialog'))return;if(ch<=1){k=k%3+1;showK()}});
+function setS(s){smooth=s;$('#sS').classList.toggle('on',s);$('#sR').classList.toggle('on',!s)}
+$('#sS').onclick=()=>setS(true);$('#sR').onclick=()=>setS(false);
+
+const dummy=new THREE.Object3D(),col=new THREE.Color(),glow=new Float32Array(N),hgt=new Float32Array(N).fill(.06);
+function cellsUpdate(t){const o=cells[origin];
+for(let i=0;i<N;i++){const c=cells[i];let g=0;
+if(origin>=0&&ch<=1){const d=hd(c,o);if(d<=k)g=1-d/(k+1)*.75}
+glow[i]+=(g-glow[i])*.18;
+const sv=(smooth?sm:raw)[i]*surgeAmt,th=.06+glow[i]*.3+sv*2.6;hgt[i]+=(th-hgt[i])*.1;
+dummy.position.set(c.x,0,c.z);dummy.scale.set(1,hgt[i],1);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
+const b=.09+.05*(.5+.5*Math.sin(t*.8-Math.hypot(c.x,c.z)*.5))*(ch===0?1:.3);
+col.setRGB(b*.45+glow[i]*.25+sv,b*.8+glow[i]*.95+sv*.42,b*1.3+glow[i]*1.1+sv*.08);mesh.setColorAt(i,col)}
+mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true}
+
+/* camera keyframes per chapter: x, y, z, look-x */
+const KF=[[0,12,17,0],[0,9.5,9.5,-3.6],[0,16,3,3.6],[-9,9,11,-3.4],[0,6.5,12,3.4],[0,26,24,0]];
+const tp=new THREE.Vector3(),look=new THREE.Vector3();let lx=0,frame=0,last=0;
+const fade=(m,v,s=.06)=>m.opacity+=(v-m.opacity)*s;
+
+function tick(ms){const t=ms/1000,dt=Math.min(.05,t-last);last=t;frame++;
+if(lenis)lenis.raf(ms);
+const f=KF[ch];tp.set(f[0]+mouse.x*.9,f[1]+mouse.y*.5,f[2]);cam.position.lerp(tp,reduce?.2:.035);
+lx+=(f[3]-lx)*.04;look.set(lx,0,0);cam.lookAt(look);
+if(ch===5)scene.rotation.y+=dt*.04;else scene.rotation.y*=.96;
+for(let i=0;i<ND;i++){let x=dp[i*3]+dv[i*2]*dt,z=dp[i*3+2]+dv[i*2+1]*dt;const lim=i<P?7:10;
+if(Math.hypot(x,z)>lim){dv[i*2]*=-1;dv[i*2+1]*=-1;x=dp[i*3];z=dp[i*3+2]}dp[i*3]=x;dp[i*3+2]=z}
+drivers.geometry.attributes.position.needsUpdate=true;
+const showR=ch===2?1:0;riders.material.opacity+=(showR-riders.material.opacity)*.06;
+const showA=ch===2?.9:0;fade(arcs.material,showA);
+if(ch===2){if(frame%40===0)match();
+const a=arcGeo.attributes.position.array;let o=0;
+for(let i=0;i<NR;i++){const j=asg[i],ax=rp[i*3],az=rp[i*3+2],bx=dp[j*3],bz=dp[j*3+2];let px=ax,py=.5,pz=az;
+for(let s=1;s<=SEG;s++){const u=s/SEG,x=ax+(bx-ax)*u,z=az+(bz-az)*u,y=.5+Math.sin(u*Math.PI)*1.6;a.set([px,py,pz,x,y,z],o);o+=6;px=x;py=y;pz=z}}
+arcGeo.attributes.position.needsUpdate=true}
+const tv=ch===4?1:0;fade(noisy.material,tv*.9);fade(filt.material,tv);fade(probe.material,tv);
+if(ch===4&&frame%6===0)telemetry(t);
+surgeAmt+=((ch===3?1:0)-surgeAmt)*.05;
+cellsUpdate(t);
+bloom.strength+=((ch===3?1.25:.8)-bloom.strength)*.05;
+vel+=(0-vel)*.08;fxp.uniforms.uS.value=reduce?0:Math.min(Math.abs(vel),6);
+composer.render()}
+
+addEventListener('resize',()=>{renderer.setSize(W(),H());composer.setSize(W(),H());cam.aspect=W()/H();cam.updateProjectionMatrix()});
+
+/* ---------- page chrome ---------- */
+gsap.registerPlugin(ScrollTrigger);
+const lenis=reduce?null:new Lenis({lerp:.09});
+if(lenis)lenis.on('scroll',e=>{ScrollTrigger.update();vel=e.velocity});
+const go=i=>{const el=$('#c'+i);lenis?lenis.scrollTo(el):el.scrollIntoView()};
+const rail=$('#rail');
+for(let i=0;i<6;i++){const b=document.createElement('button');b.setAttribute('aria-label','Chapter '+(i+1));b.innerHTML='<i></i>';b.onclick=()=>go(i);rail.appendChild(b)}
+const setCh=i=>{ch=i;[...rail.children].forEach((b,n)=>b.classList.toggle('on',n===i))};setCh(0);
+document.querySelectorAll('.ch').forEach((el,i)=>ScrollTrigger.create({trigger:el,start:'top 55%',end:'bottom 55%',onToggle:s=>s.isActive&&setCh(i)}));
+
+[['H3','Hexagonal hierarchical spatial index','https://github.com/uber/h3'],['Ringpop','SWIM gossip and consistent hashing','https://github.com/uber-node/ringpop-node'],['TChannel','Multiplexed RPC framing','https://github.com/uber/tchannel'],['Cadence','Durable workflow engine','https://github.com/uber/cadence'],['RIBs','Router, Interactor, Builder for mobile','https://github.com/uber/RIBs'],['Jaeger','Distributed tracing','https://github.com/jaegertracing/jaeger'],['M3 / M3DB','Metrics at 500M+ ops per second','https://github.com/m3db/m3'],['Apache Pinot','Real-time OLAP','https://github.com/apache/pinot'],['Apache Hudi','Lakehouse upserts','https://github.com/apache/hudi'],['Peloton','Unified cluster scheduler','https://github.com/uber/peloton'],['Kraken','P2P Docker registry','https://github.com/uber/kraken'],['Ludwig','Declarative deep learning','https://github.com/ludwig-ai/ludwig'],['Kepler.gl','WebGL geospatial exploration','https://github.com/keplergl/kepler.gl']]
+.forEach(([n,d,u])=>{const a=document.createElement('a');a.href=u;a.target='_blank';a.rel='noopener';a.innerHTML='<b>'+n+'</b><span>'+d+'</span>';$('#repos').appendChild(a)});
+
+/* cursor + magnetic buttons */
+const cd=$('#cd'),cr=$('#cr');let cx=0,cy=0,rx=0,ry=0;
+addEventListener('pointermove',e=>{cx=e.clientX;cy=e.clientY});
+document.addEventListener('pointerover',e=>cr.classList.toggle('big',!!e.target.closest('button,a')));
+(function cur(){rx+=(cx-rx)*.16;ry+=(cy-ry)*.16;cd.style.transform='translate('+cx+'px,'+cy+'px)';cr.style.transform='translate('+rx+'px,'+ry+'px)';requestAnimationFrame(cur)})();
+document.querySelectorAll('[data-m]').forEach(b=>{b.addEventListener('pointermove',e=>{const r=b.getBoundingClientRect();gsap.to(b,{x:(e.clientX-r.left-r.width/2)*.25,y:(e.clientY-r.top-r.height/2)*.35,duration:.3})});b.addEventListener('pointerleave',()=>gsap.to(b,{x:0,y:0,duration:.7,ease:'elastic.out(1,.4)'}))});
+
+/* the one orchestrated moment: headline words rise while the camera dollies in */
+const h1=$('#h1');h1.innerHTML=h1.textContent.split(' ').map(w=>'<span class="w"><i>'+w+'</i></span>').join(' ');
+if(!reduce)gsap.fromTo('#h1 i',{yPercent:110},{yPercent:0,duration:1.1,ease:'power4.out',stagger:.08,delay:.3});
+else document.querySelectorAll('#h1 i').forEach(i=>i.style.transform='none');
+
+/* ---------- report drawer, Notion export, ETA calculator ---------- */
+const MD=String.raw`# 🚕 Uber System Design: End-to-End Real-Time Architecture
+> **Executive summary:** Uber runs a stateful, low-latency marketplace across 10,000+ cities. The edge ingests more than 1.25 million GPS pings per second, indexes locations into 64-bit H3 hexagonal cells, shards state across Ringpop consistent hash rings, solves batched bipartite matching with the Hungarian algorithm (O(V³)) in 2 to 5 second windows, and computes ETAs with Customizable Route Planning plus DeepETA transformers.
+---
+## 1. Client-side engineering and edge ingestion
+### 1.1 Mobile architecture: RIBs (Router, Interactor, Builder)
+A ride-sharing client is a long-running state machine driven by asynchronous server events (WaitingForDispatch, DriverEnRoute, ArrivedAtPickup, OnTrip, SplitFare), so state transitions should not be coupled to View controllers.
+* **Interactor:** all business logic, Rx subscriptions and state mutations, independent of UI views.
+* **Router:** listens to the Interactor and attaches or detaches child RIBs in a strict tree. Supports viewless RIBs such as sensor fusion and crash detection.
+* **Builder:** dependency-injected factory that instantiates the RIB for deterministic tests and safe rollouts.
+### 1.2 Edge gateway, QUIC and RAMEN push
+* **QUIC / HTTP/3:** runs over UDP, removes TCP head-of-line blocking and keeps connections alive through Wi-Fi to 5G handoffs via Connection IDs.
+* **RAMEN:** a persistent bidirectional stream over HTTP/2 and gRPC replaces battery-draining polling. Every dispatch event carries a monotonically increasing sequence number so reconnects replay deterministically.
+´´´
+Mobile (RIBs) --QUIC/HTTP3, Protobuf--> Edge gateway (Envoy + RAMEN)
+  Edge --gRPC/TChannel--> DISCO dispatch (Ringpop + H3 in memory)
+  Edge --Kafka--> Flink + Pinot (surge, Kalman, HMM)
+  Edge --gRPC--> Trip state machine (Cadence + Docstore)
+´´´
+---
+## 2. Geospatial indexing: why Uber built H3
+### 2.1 Spatial index comparison
+| System | Geometry | Neighbours | Trade-off |
+| :--- | :--- | :--- | :--- |
+| **Geohash** | Lat/Lng rectangles | 8 neighbours, 2 distances | Distortion near high latitudes; boundary cliffs where adjacent points share no prefix. |
+| **Quadtree / R-Tree** | Dynamic squares | Variable tree pointers | High write amplification; node splits under 1M writes/sec cause lock contention. |
+| **Google S2** | Spherical squares (Hilbert) | 4 edge + 4 corner | Fast Hilbert locality, but diagonal neighbours break isotropic radial rings. |
+| **Uber H3** | Icosahedron hexagons | 6 equidistant | Uniform radial rings (gridDisk) and minimal area distortion across 16 resolutions. |
+### 2.2 H3 64-bit bitfield layout
+Every cell is one uint64, so parent and child lookups are O(1) bitwise operations with no tree traversal.
+* **Bit 63 (1 bit):** reserved, 0.
+* **Bits 59 to 62 (4 bits):** index mode (1 = cell, 2 = directed edge).
+* **Bits 56 to 58 (3 bits):** mode-dependent flags.
+* **Bits 52 to 55 (4 bits):** resolution 0 to 15. Res 8 is about 0.74 km² (dispatch); res 7 is about 5.16 km² (surge).
+* **Bits 45 to 51 (7 bits):** base cell, 0 to 121.
+* **Bits 0 to 44 (45 bits):** 15 three-bit digits (0 to 6) of the aperture-7 hierarchy.
+### 2.3 gridDisk(origin, k)
+To find drivers within k rings of a rider's cell, the number of cells is:
+$$N_{\text{cells}}(k) = 1 + 3k(k+1)$$
+k=1 gives 7 cells, k=2 gives 19, k=3 gives 37. DISCO expands rings until candidate supply passes the batch threshold.
+---
+## 3. Dispatch engine (DISCO) and Ringpop
+### 3.1 Consistent hashing
+Live driver positions stay in memory across many nodes, partitioned by Ringpop.
+* **Hash ring (XXHash):** every node and virtual node is hashed onto [0, 2³²−1]. Each H3 cell ID hashes to one owning node.
+* **Request forwarding:** a ping that lands on Node A but hashes to Node B is proxied over TChannel or gRPC in under 1 ms.
+### 3.2 SWIM gossip membership
+Instead of O(N²) heartbeat broadcasts:
+* Every period, Node A pings a random peer B over UDP.
+* If B does not ACK in time, A asks k random nodes to send an indirect ping-req(B).
+* With no indirect ACK, B is marked Suspect for a grace window, then Faulty. Membership diffs ride on normal pings, so per-node overhead is O(1).
+---
+## 4. Matching, dispatch optimization and ETA routing
+### 4.1 Batched bipartite matching (Hungarian / Kuhn-Munkres)
+Greedy first-come matching gives Rider 1 the closest driver even if Rider 2 then waits 10 minutes. Uber buffers requests for 2 to 5 seconds and builds a bipartite graph G = (R, D, E).
+$$\min \sum_{i \in R} \sum_{j \in D} C(i,j)\, x_{i,j} \quad \text{s.t.} \quad \sum_j x_{i,j} \le 1,\ \sum_i x_{i,j} \le 1,\ x_{i,j} \in \{0,1\}$$
+$$C(i,j) = w_1 \text{ETA}(d_j \to r_i) + w_2 \Delta\text{Heading}(d_j, r_i) - w_3 \text{WaitTime}(r_i) - w_4 \text{CompletionScore}(d_j)$$
+The Hungarian algorithm solves this in O(V³) by keeping dual potentials u_i + v_j ≤ C(i,j) and augmenting tight edges until the matching is complete.
+### 4.2 Road-network shortest path and DeepETA
+* **Contraction Hierarchies:** offline shortcut edges reduce bidirectional Dijkstra to under 1 ms.
+* **Customizable Route Planning:** separates graph topology from live edge weights, so boundary shortcuts recompute in under 1 second when telemetry shows a slowdown.
+* **DeepETA:** CRP gives the physics-based ETA, then a residual transformer over H3 origin and destination, weather, time of day and traffic ratios predicts the error.
+$$\hat{e} = T_{\text{actual}} - T_{\text{CRP}}$$
+---
+## 5. Telemetry filtering and surge pricing
+### 5.1 Extended Kalman Filter
+Smartphone GPS bounces in urban canyons, so 100 Hz IMU readings are fused with 0.25 Hz GPS:
+$$\hat{x}_{k|k-1} = F_k \hat{x}_{k-1|k-1} + B_k u_k, \quad P_{k|k-1} = F_k P_{k-1|k-1} F_k^T + Q_k$$
+$$K_k = P_{k|k-1} H_k^T (H_k P_{k|k-1} H_k^T + R_k)^{-1}, \quad \hat{x}_{k|k} = \hat{x}_{k|k-1} + K_k (z_k - H_k \hat{x}_{k|k-1})$$
+### 5.2 Viterbi HMM map matching
+* **Emission:** a Gaussian on the orthogonal distance from ping z_t to road segment r_i.
+$$P(z_t \mid r_i) = \frac{1}{\sqrt{2\pi}\sigma_z} \exp\left(-\frac{\text{dist}(z_t, r_i)^2}{2\sigma_z^2}\right)$$
+* **Transition:** exponential decay on the gap between great-circle and road-network distance.
+$$P(r_j \mid r_i) = \frac{1}{\beta} \exp\left(-\frac{|d_{euc} - d_{road}|}{\beta}\right)$$
+* **Decoding:** Viterbi finds argmax P(R|Z) in O(T·M²).
+### 5.3 Hexagonal convolution for surge
+Flink aggregates supply S(h) and demand D(h) per H3 cell. To stop a street crossing from dropping 2.4x to 1.0x, a weighted kernel runs over k-ring neighbours:
+$$M_{\text{smooth}}(h) = \frac{\sum_{h'} w(\text{ringDist}(h,h'))\, M_{\text{raw}}(h')}{\sum_{h'} w(\text{ringDist}(h,h'))}$$
+---
+## 6. Storage, transactions and fault tolerance
+* **Schemaless and Docstore:** append-only immutable cells sharded across MySQL or RocksDB with Raft. Every write appends a versioned cell, so buffered writes continue through shard failovers.
+* **Cadence / Temporal sagas:** Hold Auth → Dispatch → Complete Trip → Capture Payment run as durable state machines with idempotency keys, UUIDv5(trip_id, operation).
+* **Double-entry ledger:** every fare writes balanced DEBIT and CREDIT rows to an immutable ledger, so no payout is lost or duplicated.
+---
+## 7. Open-source ecosystem
+| Repository | Category | Role | URL |
+| :--- | :--- | :--- | :--- |
+| **H3** | Geospatial | Hexagonal hierarchical spatial index | https://github.com/uber/h3 |
+| **Ringpop** | Distributed systems | SWIM gossip and consistent hash ring | https://github.com/uber-node/ringpop-node |
+| **TChannel** | Networking | Multiplexed framing with out-of-order RPC | https://github.com/uber/tchannel |
+| **Cadence** | Orchestration | Fault-tolerant workflow engine | https://github.com/uber/cadence |
+| **RIBs** | Mobile | Router-Interactor-Builder architecture | https://github.com/uber/RIBs |
+| **Jaeger** | Observability | Distributed tracing | https://github.com/jaegertracing/jaeger |
+| **M3 / M3DB** | Metrics | Prometheus-compatible TSDB at 500M+ ops/sec | https://github.com/m3db/m3 |
+| **Apache Pinot** | Real-time OLAP | Sub-second analytical queries | https://github.com/apache/pinot |
+| **Apache Hudi** | Lakehouse | Upserts and incremental streaming | https://github.com/apache/hudi |
+| **Peloton** | Cluster management | Unified Mesos/K8s scheduler | https://github.com/uber/peloton |
+| **Kraken** | Infrastructure | P2P Docker registry for 20k+ hosts | https://github.com/uber/kraken |
+| **Ludwig / Horovod** | Deep learning | Declarative DL and distributed GPU training | https://github.com/ludwig-ai/ludwig |
+| **Kepler.gl / deck.gl** | Geo visualization | GPU-accelerated geospatial exploration | https://github.com/keplergl/kepler.gl |
+`.replace(/´/g,'`');
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const inl=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/(https?:\/\/[^\s|<)]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+function md2html(src){const L=src.split('\n');let o='',i=0;
+while(i<L.length){const l=L[i];
+if(l.startsWith('```')){let c='';i++;while(i<L.length&&!L[i].startsWith('```'))c+=L[i++]+'\n';i++;o+='<pre>'+esc(c)+'</pre>';continue}
+if(l.startsWith('$$')){o+='<div class="math">'+esc(l)+'</div>';i++;continue}
+if(l.startsWith('|')){const rows=[];while(i<L.length&&L[i].startsWith('|'))rows.push(L[i++]);const cl=r=>r.replace(/^\||\|$/g,'').split('|').map(x=>inl(x.trim()));
+o+='<div class="tw"><table><tr>'+cl(rows[0]).map(c=>'<th>'+c+'</th>').join('')+'</tr>'+rows.slice(2).map(r=>'<tr>'+cl(r).map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</table></div>';continue}
+if(l.startsWith('* ')){o+='<ul>';while(i<L.length&&L[i].startsWith('* '))o+='<li>'+inl(L[i++].slice(2))+'</li>';o+='</ul>';continue}
+const h=l.match(/^(#{1,3}) (.*)/);
+if(h)o+='<h'+h[1].length+'>'+inl(h[2])+'</h'+h[1].length+'>';
+else if(l.startsWith('> '))o+='<blockquote>'+inl(l.slice(2))+'</blockquote>';
+else if(l==='---')o+='<hr>';
+else if(l.trim())o+='<p>'+inl(l)+'</p>';
+i++}return o}
+$('#rb').innerHTML=md2html(MD);$('#rawta').value=MD;
+const rep=$('#rep');
+function repOpen(o){rep.classList.toggle('open',o);rep.toggleAttribute('inert',!o);$('#bRep').textContent=o?'Close report':'Report';$('#bRep').setAttribute('aria-expanded',o)}
+$('#bRep').onclick=()=>repOpen(!rep.classList.contains('open'));
+addEventListener('keydown',e=>{if(e.key==='Escape')repOpen(false)});
+function say(t){const x=$('#toast');x.textContent=t;x.classList.add('on');setTimeout(()=>x.classList.remove('on'),2800)}
+$('#bCopy').onclick=async()=>{let ok=true;try{await navigator.clipboard.writeText(MD)}catch(e){const t=document.createElement('textarea');t.value=MD;document.body.appendChild(t);t.select();ok=document.execCommand('copy');t.remove()}
+say(ok?'Markdown copied. Paste it into a Notion page.':'Copy was blocked. Open Raw MD and copy from there.')};
+$('#bRaw').onclick=()=>$('#raw').showModal();$('#rawx').onclick=()=>$('#raw').close();
+function eta(){const m=[0,1,2].map(()=>[0,1,2].map(()=>2+Math.floor(Math.random()*11)));
+const used=[],g=m.map(r=>{let j=-1;r.forEach((v,c)=>{if(!used.includes(c)&&(j<0||v<r[j]))j=c});used.push(j);return j});
+const gs=g.reduce((s,j,i)=>s+m[i][j],0);let bp=null,bs=1e9;
+[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]].forEach(p=>{const s=p.reduce((a,j,i)=>a+m[i][j],0);if(s<bs){bs=s;bp=p}});
+$('#etaT').innerHTML='<table><tr><th>Rider</th><th>D1</th><th>D2</th><th>D3</th></tr>'+m.map((r,i)=>'<tr><td>R'+(i+1)+'</td>'+r.map((v,j)=>'<td class="'+(bp[i]===j?'win':'')+'">'+v+'m</td>').join('')+'</tr>').join('')+'</table>';
+$('#etaR').innerHTML='<p>Greedy picks R1→D'+(g[0]+1)+', R2→D'+(g[1]+1)+', R3→D'+(g[2]+1)+' for <b>'+gs+' min</b>. Hungarian optimum (green) is <b>'+bs+' min</b>'+(gs>bs?', a '+Math.round((gs-bs)/gs*100)+'% saving.':'. Greedy happens to be optimal this time.')+'</p>'}
+$('#etaB').onclick=eta;eta();
+document.querySelectorAll('#bRep,#bRaw,#bCopy').forEach(b=>{b.addEventListener('pointermove',e=>{const r=b.getBoundingClientRect();gsap.to(b,{x:(e.clientX-r.left-r.width/2)*.25,y:(e.clientY-r.top-r.height/2)*.35,duration:.3})});b.addEventListener('pointerleave',()=>gsap.to(b,{x:0,y:0,duration:.7,ease:'elastic.out(1,.4)'}))});
+
+newRiders();setM('h');requestAnimationFrame(function loop(ms){tick(ms);requestAnimationFrame(loop)});
+</script>
+</body>
+</html>
